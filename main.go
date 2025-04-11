@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -53,6 +55,7 @@ func addTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *Stor
 		http.Error(w, "Failed to decode todo", http.StatusBadRequest)
 		return
 	}
+	todo.ID = uuid.NewString() // generate a new UUID for the todo
 	todo.CreatedAt = time.Now()
 	*todos = append(*todos, todo)
 	if err := storage.Save(*todos); err != nil { // save the updated todos to the file
