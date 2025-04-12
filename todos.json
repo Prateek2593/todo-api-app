@@ -1,23 +1,5 @@
 [
   {
-    "id": "",
-    "title": "Learn REST APIs",
-    "completed": false,
-    "created_at": "2025-04-11T23:28:40.4812393+05:30",
-    "completed_at": null,
-    "priority": "high",
-    "notes": "Study HTTP methods"
-  },
-  {
-    "id": "",
-    "title": "Go for a walk",
-    "completed": false,
-    "created_at": "2025-04-11T23:30:03.2263119+05:30",
-    "completed_at": null,
-    "priority": "low",
-    "notes": ""
-  },
-  {
     "id": "0438fb6a-7b40-447a-b5d0-d59a0397d0e6",
     "title": "Testing",
     "completed": false,
@@ -25,14 +7,5 @@
     "completed_at": null,
     "priority": "",
     "notes": ""
-  },
-  {
-    "id": "74fa652f-424a-4dc3-9e69-d0f923c3824d",
-    "title": "Learn UUIDs",
-    "completed": false,
-    "created_at": "2025-04-11T23:50:55.2193493+05:30",
-    "completed_at": null,
-    "priority": "high",
-    "notes": "Add IDs to API"
   }
 ]

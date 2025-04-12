@@ -33,6 +33,15 @@ func main() {
 		}
 	})
 
+	http.HandleFunc("/todos/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			id := r.URL.Path[len("/todos/"):]
+			deleteTodo(w, r, &todos, storage, id)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// start the HTTP server on port 8080
 	fmt.Println("Server started on :8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
@@ -68,4 +77,20 @@ func addTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *Stor
 		log.Printf("Error encoding response: %v", err)
 	}
 
+}
+
+// deleteTodo handles the DELETE request to delete a todo by its ID and save the updated list to the file
+func deleteTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *Storage[Todos], id string) {
+	for i, todo := range *todos {
+		if todo.ID == id {
+			*todos = append((*todos)[:i], (*todos)[i+1:]...)
+			if err := storage.Save(*todos); err != nil {
+				http.Error(w, "Failed to save todos", http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent) // send a 204 No Content response
+			return
+		}
+	}
+	http.Error(w, "Todo not found", http.StatusNotFound)
 }
