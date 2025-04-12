@@ -34,10 +34,16 @@ func main() {
 	})
 
 	http.HandleFunc("/todos/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			id := r.URL.Path[len("/todos/"):]
+		id := r.URL.Path[len("/todos/"):]
+		switch r.Method {
+		case http.MethodDelete:
+			// handle DELETE request to delete a todo by ID
 			deleteTodo(w, r, &todos, storage, id)
-		} else {
+		case http.MethodPut:
+			// handle PUT request to update a todo by ID
+			updateTodo(w, r, &todos, storage, id)
+		default:
+			// handle unsupported methods
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
@@ -89,6 +95,54 @@ func deleteTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *S
 				return
 			}
 			w.WriteHeader(http.StatusNoContent) // send a 204 No Content response
+			return
+		}
+	}
+	http.Error(w, "Todo not found", http.StatusNotFound)
+}
+
+// updateTodo handles the PUT request to update a todo by its ID and save the updated list to the file
+func updateTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *Storage[Todos], id string) {
+	var updates struct {
+		Title     *string `json:"title"`
+		Completed *bool   `json:"completed"`
+		Priority  *string `json:"priority"`
+		Notes     *string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		http.Error(w, "Failed to decode updates", http.StatusBadRequest)
+		return
+	}
+	for i, todo := range *todos {
+		if todo.ID == id {
+			if updates.Title != nil {
+				todo.Title = *updates.Title
+			}
+			if updates.Completed != nil {
+				todo.Completed = *updates.Completed
+				if todo.Completed {
+					now := time.Now()
+					todo.CompletedAt = &now
+				} else {
+					todo.CompletedAt = nil
+				}
+			}
+			if updates.Priority != nil {
+				todo.Priority = *updates.Priority
+			}
+			if updates.Notes != nil {
+				todo.Notes = *updates.Notes
+			}
+			(*todos)[i] = todo                           // update the todo in the slice
+			if err := storage.Save(*todos); err != nil { // save the updated todos to the file
+				http.Error(w, "Failed to save todos", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			if err := json.NewEncoder(w).Encode(todo); err != nil {
+				log.Printf("Error encoding response: %v", err)
+			}
 			return
 		}
 	}
