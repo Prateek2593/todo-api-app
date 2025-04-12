@@ -42,6 +42,9 @@ func main() {
 		case http.MethodPut:
 			// handle PUT request to update a todo by ID
 			updateTodo(w, r, &todos, storage, id)
+		case http.MethodGet:
+			// handle GET request to retrieve a specific todo by ID
+			getTodo(w, r, &todos, id)
 		default:
 			// handle unsupported methods
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -145,6 +148,22 @@ func updateTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *S
 			}
 			return
 		}
+	}
+	http.Error(w, "Todo not found", http.StatusNotFound)
+}
+
+// getTodo handles the GET request to retrieve a specific todo by its ID and send it as a JSON response
+func getTodo(w http.ResponseWriter, r *http.Request, todos *Todos, id string) {
+	w.Header().Set("Content-Type", "application/json")
+	for _, todo := range *todos {
+		if todo.ID == id {
+			if err := json.NewEncoder(w).Encode(todo); err != nil {
+				http.Error(w, "Failed to encode todo", http.StatusInternalServerError)
+				return
+			}
+			return
+		}
+
 	}
 	http.Error(w, "Todo not found", http.StatusNotFound)
 }
