@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,6 +62,26 @@ func (app *App) addTodo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to decode todo", http.StatusBadRequest)
 		return
 	}
+
+	// validate the todo title
+	if strings.TrimSpace(todo.Title) == "" {
+		http.Error(w, "Title is required", http.StatusBadRequest)
+		return
+	}
+
+	// validate the todo priority
+	if todo.Priority != "" {
+		switch strings.ToLower(todo.Priority) {
+		case "low", "medium", "high":
+			// valid priority
+			todo.Priority = strings.ToLower(todo.Priority) // normalize the priority to lowercase
+		default:
+			http.Error(w, "Invalid priority. Allowed values are: low, medium, high", http.StatusBadRequest)
+			return
+
+		}
+	}
+
 	todo.ID = uuid.NewString() // generate a new UUID for the todo
 	todo.CreatedAt = time.Now()
 	*app.todos = append(*app.todos, todo)
@@ -79,6 +100,10 @@ func (app *App) addTodo(w http.ResponseWriter, r *http.Request) {
 // deleteTodo handles the DELETE request to delete a todo by its ID and save the updated list to the file
 func (app *App) deleteTodo(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
+	if _, err := uuid.Parse(id); err != nil {
+		http.Error(w, "Invalid UUID format", http.StatusBadRequest)
+		return
+	}
 	for i, todo := range *app.todos {
 		if todo.ID == id {
 			*app.todos = append((*app.todos)[:i], (*app.todos)[i+1:]...)
@@ -96,6 +121,10 @@ func (app *App) deleteTodo(w http.ResponseWriter, r *http.Request) {
 // updateTodo handles the PUT request to update a todo by its ID and save the updated list to the file
 func (app *App) updateTodo(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
+	if _, err := uuid.Parse(id); err != nil {
+		http.Error(w, "Invalid UUID format", http.StatusBadRequest)
+		return
+	}
 	var updates struct {
 		Title     *string `json:"title"`
 		Completed *bool   `json:"completed"`
@@ -106,6 +135,29 @@ func (app *App) updateTodo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to decode updates", http.StatusBadRequest)
 		return
 	}
+
+	// validate the updates
+	if updates.Title == nil && updates.Completed == nil && updates.Priority == nil && updates.Notes == nil {
+		http.Error(w, "At least one field must be updated", http.StatusBadRequest)
+		return
+	}
+
+	if updates.Title != nil && strings.TrimSpace(*updates.Title) == "" {
+		http.Error(w, "Title is required", http.StatusBadRequest)
+		return
+	}
+
+	if updates.Priority != nil {
+		switch strings.ToLower(*updates.Priority) {
+		case "low", "medium", "high":
+			// valid priority
+			*updates.Priority = strings.ToLower(*updates.Priority) // normalize the priority to lowercase
+		default:
+			http.Error(w, "Invalid priority. Allowed values are: low, medium, high", http.StatusBadRequest)
+			return
+		}
+	}
+
 	for i, todo := range *app.todos {
 		if todo.ID == id {
 			if updates.Title != nil {
@@ -145,6 +197,10 @@ func (app *App) updateTodo(w http.ResponseWriter, r *http.Request) {
 // getTodo handles the GET request to retrieve a specific todo by its ID and send it as a JSON response
 func (app *App) getTodo(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
+	if _, err := uuid.Parse(id); err != nil {
+		http.Error(w, "Invalid UUID format", http.StatusBadRequest)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	for _, todo := range *app.todos {
 		if todo.ID == id {
