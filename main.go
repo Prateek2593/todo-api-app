@@ -8,7 +8,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 )
+
+// App represents the main application
+type App struct {
+	todos   *Todos
+	storage *Storage[Todos]
+}
 
 func main() {
 	// initialize a new Todos instance and a Storage instance for the "todos.json" file
@@ -18,56 +25,37 @@ func main() {
 		log.Fatalf("Failed to load todos: %v", err)
 	}
 
-	// route handler for /todos
-	http.HandleFunc("/todos", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			// handle GET request to retrieve todos
-			listTodos(w, r, &todos)
-		case http.MethodPost:
-			// handle POST request to add a new todo
-			addTodo(w, r, &todos, storage)
-		default:
-			// handle unsupported methods
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	app := &App{
+		todos:   &todos,
+		storage: storage,
+	}
 
-	http.HandleFunc("/todos/", func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Path[len("/todos/"):]
-		switch r.Method {
-		case http.MethodDelete:
-			// handle DELETE request to delete a todo by ID
-			deleteTodo(w, r, &todos, storage, id)
-		case http.MethodPut:
-			// handle PUT request to update a todo by ID
-			updateTodo(w, r, &todos, storage, id)
-		case http.MethodGet:
-			// handle GET request to retrieve a specific todo by ID
-			getTodo(w, r, &todos, id)
-		default:
-			// handle unsupported methods
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	// create a new router using gorilla/mux
+	router := mux.NewRouter()
+	// define the routes and their handlers
+	router.HandleFunc("/todos", app.listTodos).Methods("GET")
+	router.HandleFunc("/todos", app.addTodo).Methods("POST")
+	router.HandleFunc("/todos/{id}", app.getTodo).Methods("GET")
+	router.HandleFunc("/todos/{id}", app.updateTodo).Methods("PUT")
+	router.HandleFunc("/todos/{id}", app.deleteTodo).Methods("DELETE")
 
 	// start the HTTP server on port 8080
 	fmt.Println("Server started on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(":8080", router); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
 
 // listTodos handles the GET request to retrieve todos and send them as a JSON response
-func listTodos(w http.ResponseWriter, r *http.Request, todos *Todos) {
+func (app *App) listTodos(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(todos); err != nil {
+	if err := json.NewEncoder(w).Encode(*app.todos); err != nil {
 		http.Error(w, "Failed to encode todos", http.StatusInternalServerError)
 	}
 }
 
 // addTodo handles the POST request to add a new todo and save it to the file
-func addTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *Storage[Todos]) {
+func (app *App) addTodo(w http.ResponseWriter, r *http.Request) {
 	var todo Todo
 	if err := json.NewDecoder(r.Body).Decode(&todo); err != nil {
 		http.Error(w, "Failed to decode todo", http.StatusBadRequest)
@@ -75,8 +63,8 @@ func addTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *Stor
 	}
 	todo.ID = uuid.NewString() // generate a new UUID for the todo
 	todo.CreatedAt = time.Now()
-	*todos = append(*todos, todo)
-	if err := storage.Save(*todos); err != nil { // save the updated todos to the file
+	*app.todos = append(*app.todos, todo)
+	if err := app.storage.Save(*app.todos); err != nil { // save the updated todos to the file
 		http.Error(w, "Failed to save todos", http.StatusInternalServerError)
 		return
 	}
@@ -89,11 +77,12 @@ func addTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *Stor
 }
 
 // deleteTodo handles the DELETE request to delete a todo by its ID and save the updated list to the file
-func deleteTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *Storage[Todos], id string) {
-	for i, todo := range *todos {
+func (app *App) deleteTodo(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	for i, todo := range *app.todos {
 		if todo.ID == id {
-			*todos = append((*todos)[:i], (*todos)[i+1:]...)
-			if err := storage.Save(*todos); err != nil {
+			*app.todos = append((*app.todos)[:i], (*app.todos)[i+1:]...)
+			if err := app.storage.Save(*app.todos); err != nil {
 				http.Error(w, "Failed to save todos", http.StatusInternalServerError)
 				return
 			}
@@ -105,7 +94,8 @@ func deleteTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *S
 }
 
 // updateTodo handles the PUT request to update a todo by its ID and save the updated list to the file
-func updateTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *Storage[Todos], id string) {
+func (app *App) updateTodo(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
 	var updates struct {
 		Title     *string `json:"title"`
 		Completed *bool   `json:"completed"`
@@ -116,7 +106,7 @@ func updateTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *S
 		http.Error(w, "Failed to decode updates", http.StatusBadRequest)
 		return
 	}
-	for i, todo := range *todos {
+	for i, todo := range *app.todos {
 		if todo.ID == id {
 			if updates.Title != nil {
 				todo.Title = *updates.Title
@@ -136,8 +126,8 @@ func updateTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *S
 			if updates.Notes != nil {
 				todo.Notes = *updates.Notes
 			}
-			(*todos)[i] = todo                           // update the todo in the slice
-			if err := storage.Save(*todos); err != nil { // save the updated todos to the file
+			(*app.todos)[i] = todo                               // update the todo in the slice
+			if err := app.storage.Save(*app.todos); err != nil { // save the updated todos to the file
 				http.Error(w, "Failed to save todos", http.StatusInternalServerError)
 				return
 			}
@@ -153,9 +143,10 @@ func updateTodo(w http.ResponseWriter, r *http.Request, todos *Todos, storage *S
 }
 
 // getTodo handles the GET request to retrieve a specific todo by its ID and send it as a JSON response
-func getTodo(w http.ResponseWriter, r *http.Request, todos *Todos, id string) {
+func (app *App) getTodo(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
 	w.Header().Set("Content-Type", "application/json")
-	for _, todo := range *todos {
+	for _, todo := range *app.todos {
 		if todo.ID == id {
 			if err := json.NewEncoder(w).Encode(todo); err != nil {
 				http.Error(w, "Failed to encode todo", http.StatusInternalServerError)
